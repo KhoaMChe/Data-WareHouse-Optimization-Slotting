@@ -1,0 +1,24 @@
+services:
+  postgres-dw:
+    image: postgres:16-alpine
+    container_name: warehouse_dw_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dw_admin
+      POSTGRES_PASSWORD: dw_password123
+      POSTGRES_DB: warehouse_dw
+    ports:
+      - "5433:5432"  # Dùng cổng 5433 trên máy host để tránh xung đột với PostgreSQL cục bộ
+    volumes:
+      - ./warehouse/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      - dw_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dw_admin -d warehouse_dw"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  dw_pgdata:
+    driver: local
+
