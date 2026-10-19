@@ -79,6 +79,9 @@ BTL/
 ├── warehouse/
 │   └── schema.sql                # DDL chuẩn PostgreSQL (Tự động chạy khi khởi động Docker)
 │
+├── OLAP/
+│   └── OLAP_Analysis.ipynb       # Phân tích đa chiều: Roll-up, Drill-down, Slice, Dice, Cube, Pareto
+│
 ├── docker-compose.yml            # Khởi chạy PostgreSQL 16 trên Docker (Port 5433)
 └── README.md                     # Tài liệu hướng dẫn dự án
 ```
@@ -101,6 +104,10 @@ Container `warehouse_dw_postgres` sẽ khởi động và sẵn sàng nhận k�
 ### Bước 3: Chạy Tầng 2 — Mô hình hóa & Nạp Data Warehouse (`ETL/DataWH.ipynb`)
 * Mở và chạy file [`ETL/DataWH.ipynb`](file:///d:/Cong%20Viec/Tailieu261/DataWarehouse/BTL/ETL/DataWH.ipynb).
 * Dữ liệu từ `data/staging/` sẽ được ánh xạ khóa thay thế (Surrogate Keys) và nạp tự động vào PostgreSQL trong container Docker.
+
+### Bước 4: Chạy Phân tích Đa Chiều OLAP (`OLAP/OLAP_Analysis.ipynb`)
+* Mở và xem kết quả tại [`OLAP/OLAP_Analysis.ipynb`](file:///d:/Cong%20Viec/Tailieu261/DataWarehouse/BTL/OLAP/OLAP_Analysis.ipynb).
+* Bao gồm đầy đủ 6 thao tác phân tích nâng cao (Roll-up, Drill-down, Slice, Dice, Pivot/Cube, Pareto 80/20) kèm 6 biểu đồ trực quan hóa.
 
 ---
 
