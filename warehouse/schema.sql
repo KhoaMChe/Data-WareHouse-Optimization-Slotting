@@ -78,6 +78,18 @@ INSERT INTO dim_strategy (strategy_code, strategy_name, description, target_metr
 ('Dedicated', 'Dedicated Storage Strategy', 'Mỗi sản phẩm có vị trí cố định duy nhất trong kho theo mã XYZ.', 'Kiểm soát vị trí cố định'),
 ('Hybrid', 'Hybrid Storage Strategy', 'Kết hợp linh hoạt giữa Class-Based và Dedicated để cân bằng dung lượng và cự ly.', 'Cân bằng tải và quãng đường');
 
+-- 1.6 Chiều Điểm điều hướng / Mạng lưới lối đi kho (Navigation Waypoints cho DSS & AGV)
+CREATE TABLE dim_nav_point (
+    nav_key         SERIAL PRIMARY KEY,
+    label           VARCHAR(20) NOT NULL UNIQUE,     -- LC-01, CC-05, RC-12
+    corridor_code   VARCHAR(10) NOT NULL,            -- LC, CC, RC
+    corridor_name   VARCHAR(50) NOT NULL,            -- Left Corridor, Central Corridor, Right Corridor
+    point_number    INTEGER,                         -- Thứ tự điểm mốc dọc hành lang (1-17)
+    x_nav           DOUBLE PRECISION NOT NULL,
+    y_nav           DOUBLE PRECISION NOT NULL,
+    z_nav           DOUBLE PRECISION NOT NULL
+);
+
 -- ============================================================================
 -- 2. FACT TABLES (CÁC BẢNG SỰ KIỆN)
 -- ============================================================================
