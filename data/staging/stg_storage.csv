@@ -1,4 +1,4 @@
-strategy,location_code,classification_code,slot_number,reference,quantity
+strategy,location_code,classification_code,slot_number,reference,size_us
 Random,A-14-11,,1,TQBVRI,7.0
 Random,A-14-12,,1,YE890X,5.0
 Random,A-14-13,,1,M8W7TS,12.0

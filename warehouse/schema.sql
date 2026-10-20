@@ -120,7 +120,7 @@ CREATE TABLE fact_storage (
     product_key         INTEGER REFERENCES dim_product(product_key),
     slot_number         INTEGER,                     -- Vị trí slot từ 1 đến 18 trong ô kệ
     classification_code VARCHAR(10),                 -- Mã nhóm ABC hoặc XYZ theo layout
-    quantity            DOUBLE PRECISION
+    size_us             DOUBLE PRECISION             -- Kích cỡ giày US (Shoe Size, chuẩn từ bài báo khoa học)
 );
 
 -- ============================================================================
