@@ -1,11 +1,12 @@
 -- ============================================================================
 -- DATA WAREHOUSE SCHEMA FOR WAREHOUSE ORDER PICKING & DSS SYSTEM
 -- RDBMS: PostgreSQL 16
--- Model: Fact Constellation (7 Dimensions, 3 Fact Tables)
--- Phiên bản: v2.0 — Cập nhật sau đánh giá khắt khe thiết kế DIM/FACT
+-- Model: Fact Constellation (7 Dimensions, 3 Fact Tables + DSS Inventory View)
+-- Phiên bản: v3.0 — Tối ưu hóa cho 2 Bài toán DSS: Optimal Picking & Optimal Put-Away
 -- ============================================================================
 
 -- Dọn dẹp nếu đã tồn tại (theo thứ tự phụ thuộc FK)
+DROP VIEW  IF EXISTS v_warehouse_inventory CASCADE;
 DROP TABLE IF EXISTS fact_storage CASCADE;
 DROP TABLE IF EXISTS fact_picking CASCADE;
 DROP TABLE IF EXISTS fact_order   CASCADE;
@@ -22,19 +23,29 @@ DROP TABLE IF EXISTS dim_product   CASCADE;
 -- 1. DIMENSION TABLES (CÁC BẢNG CHIỀU)
 -- ============================================================================
 
--- 1.1 Chiều Sản phẩm
--- THAY ĐỔI v2.0: Thêm xyz_code (phân loại ổn định nhu cầu) và source (xuất xứ SKU)
+-- 1.1 Chiều Sản phẩm (MẶT HÀNG)
+-- Ý NGHĨA NGHIỆP VỤ: abc_code đánh giá MỨC ĐỘ ƯU TIÊN MẶT HÀNG (SKU Velocity / Demand)
+--   • A: Nhu cầu cao / Bán chạy (Hot SKU) -> Cần pick nhiều lần, ưu tiên vị trí đẹp nhất
+--   • B: Nhu cầu trung bình
+--   • C: Nhu cầu thấp / Bán chậm (Slow-moving)
 CREATE TABLE dim_product (
     product_key     SERIAL PRIMARY KEY,
-    reference       VARCHAR(50) NOT NULL UNIQUE,
+    reference       VARCHAR(50) NOT NULL UNIQUE,     -- Mã định danh SKU (ví dụ: O9YFO8)
     abc_code        VARCHAR(5)  NOT NULL,            -- A: Fast-moving, B: Medium, C: Slow-moving
-    xyz_code        VARCHAR(5),                      -- X: Stable demand, Y: Variable, Z: Irregular, C: Slow
     sector          VARCHAR(50),                     -- Ngành hàng: PF (Protective Footwear)
-    source          VARCHAR(20) NOT NULL DEFAULT 'catalog'  -- 'catalog' | 'extended' (từ layout kho)
+    source          VARCHAR(20) NOT NULL DEFAULT 'catalog'  -- 'catalog' | 'extended'
 );
 
--- 1.2 Chiều Vị trí ô kệ lưu trữ (kèm tọa độ không gian 3D)
--- THAY ĐỔI v2.0: Thêm floor_type (phân loại tầng theo nghiệp vụ) và rack_capacity (sức chứa kệ)
+-- 1.2 Chiều Vị trí ô kệ lưu trữ (VỊ TRÍ KỆ CHO NHÂN VIÊN)
+-- Ý NGHĨA NGHIỆP VỤ: 
+--   • xyz_code đánh giá MỨC ĐỘ ƯU TIÊN VỊ TRÍ CHO NHÂN VIÊN LẤY HÀNG (Picker Accessibility / Dedicated Slotting)
+--       - X: Vị trí 'Vàng', chuyên dụng 1 mặt hàng, cực kỳ thuận tiện, nhân viên lấy ngay không phải tìm
+--       - Y: Vị trí thuận tiện bậc trung
+--       - Z: Vị trí sâu hơn / biến động
+--       - C: Vị trí đệm / chậm luân chuyển
+--   • abc_zone: Phân vùng cự ly không gian (A: Gần cửa I/O, B: Trung gian, C: Vùng sâu)
+--   • floor_type: 'Manual Picking' (Tầng 1-2, lấy tay) vs 'Replenishment' (Tầng 3-4, xe nâng)
+--   • dist_from_origin: Khoảng cách Euclidean chính xác tới cửa xuất I/O (mét)
 CREATE TABLE dim_location (
     location_key     SERIAL PRIMARY KEY,
     location_code    VARCHAR(50) NOT NULL UNIQUE,     -- Mã định danh: e.g. H-06-13
@@ -47,7 +58,9 @@ CREATE TABLE dim_location (
     slot             INTEGER,                         -- Ô trên kệ
     dist_from_origin DOUBLE PRECISION,                -- Khoảng cách Euclidean từ điểm I/O (cửa xuất kho)
     floor_type       VARCHAR(30),                     -- 'Manual Picking' (z=1,2) | 'Replenishment' (z=3,4)
-    rack_capacity    SMALLINT DEFAULT 18              -- Số ngăn chứa trên mỗi ô kệ (18 slots/vị trí)
+    xyz_code         VARCHAR(5)  DEFAULT 'C',         -- 'X': Đắc địa chuyên dụng, 'Y': Vừa, 'Z': Sâu, 'C': Đệm
+    abc_zone         VARCHAR(5)  DEFAULT 'C',         -- 'A': Gần cửa, 'B': Vùng giữa, 'C': Vùng sâu
+    rack_capacity    SMALLINT    DEFAULT 18           -- Số ngăn chứa trên mỗi ô kệ (18 slots/vị trí)
 );
 
 -- 1.3 Chiều Thời gian (cấp độ Ngày)
@@ -71,9 +84,8 @@ CREATE TABLE dim_operator (
     operator_name   VARCHAR(50) NOT NULL UNIQUE
 );
 
--- 1.5 Chiều Đợt gom hàng (Picking Wave) — MỚI HOÀN TOÀN trong v2.0
--- Lý do: wave_number là một business entity có thuộc tính riêng, không chỉ là số thô.
--- Mỗi Wave đại diện cho 1 đợt gom hàng được giao cho 1 nhân viên trên 1 xe đẩy (tối đa 27 items).
+-- 1.5 Chiều Đợt gom hàng (Picking Wave)
+-- Đại diện cho 1 đợt gom đơn được giao cho 1 nhân viên trên 1 xe đẩy (tối đa 27 items)
 CREATE TABLE dim_wave (
     wave_key              SERIAL PRIMARY KEY,
     wave_number           INTEGER NOT NULL UNIQUE,   -- Mã Wave gốc từ WMS
@@ -120,32 +132,25 @@ CREATE TABLE dim_nav_point (
 -- ============================================================================
 
 -- 2.1 FACT_ORDER: Nhu cầu xuất kho từ đơn hàng khách hàng
--- THAY ĐỔI v2.0: Thêm wave_key (FK đến dim_wave) và UNIQUE constraint đúng hạt.
--- Hạt (Grain): 1 dòng = 1 dòng SKU trong 1 đơn hàng được xử lý trong 1 Wave cụ thể.
--- NOTE: wave_number được giữ lại dưới dạng degenerate dim để backward-compat.
 CREATE TABLE fact_order (
     order_item_id    SERIAL PRIMARY KEY,
     order_number     INTEGER  NOT NULL,
     order_to_collect INTEGER,
     customer_code    VARCHAR(50),
     date_key         INTEGER  REFERENCES dim_date(date_key),
-    wave_key         INTEGER  REFERENCES dim_wave(wave_key),    -- FK mới đến dim_wave
+    wave_key         INTEGER  REFERENCES dim_wave(wave_key),
     product_key      INTEGER  REFERENCES dim_product(product_key),
     operator_key     INTEGER  REFERENCES dim_operator(operator_key),
-    wave_number      INTEGER,                                    -- Degenerate dim (giữ lại để tương thích)
+    wave_number      INTEGER,
     size_us          DOUBLE PRECISION,
     quantity_units   INTEGER  NOT NULL
 );
 
--- 2.2 FACT_PICKING: Hoạt động lấy hàng thực tế theo từng đợt sóng
--- THAY ĐỒI v2.0:
---   (a) Thêm wave_key (FK đến dim_wave)
---   (b) XÓA x, y, z, dist_from_origin — tọa độ là thuộc tính của dim_location, không phải measure của Fact.
---       Truy vấn OLAP/DSS dùng: JOIN dim_location ON location_key để lấy tọa độ khi cần.
+-- 2.2 FACT_PICKING: Hoạt động lấy hàng thực tế theo từng đợt sóng (Phục vụ DSS Solution 1)
 CREATE TABLE fact_picking (
     pick_id          SERIAL PRIMARY KEY,
-    wave_number      INTEGER  NOT NULL,                          -- Degenerate dim
-    wave_key         INTEGER  REFERENCES dim_wave(wave_key),     -- FK mới đến dim_wave
+    wave_number      INTEGER  NOT NULL,
+    wave_key         INTEGER  REFERENCES dim_wave(wave_key),
     date_key         INTEGER  REFERENCES dim_date(date_key),
     product_key      INTEGER  REFERENCES dim_product(product_key),
     location_key     INTEGER  REFERENCES dim_location(location_key),
@@ -154,8 +159,7 @@ CREATE TABLE fact_picking (
     qty_to_pick      INTEGER  NOT NULL
 );
 
--- 2.3 FACT_STORAGE: Hiện trạng phân bổ vị trí lưu trữ hàng hóa theo từng chiến lược
--- Hạt (Grain): 1 dòng = 1 ngăn (slot) trên 1 vị trí kệ theo 1 chiến lược cụ thể.
+-- 2.3 FACT_STORAGE: Hiện trạng phân bổ vị trí lưu trữ và tồn kho thực tế (Phục vụ DSS Solution 1 & 2)
 CREATE TABLE fact_storage (
     storage_id          SERIAL PRIMARY KEY,
     strategy_key        INTEGER REFERENCES dim_strategy(strategy_key),
@@ -163,11 +167,43 @@ CREATE TABLE fact_storage (
     product_key         INTEGER REFERENCES dim_product(product_key),
     slot_number         INTEGER,                     -- Vị trí slot từ 1 đến 18 trong ô kệ
     classification_code VARCHAR(10),                 -- Mã nhóm ABC hoặc XYZ theo layout chiến lược
-    size_us             DOUBLE PRECISION             -- Kích cỡ giày US (Shoe Size theo bài báo khoa học)
+    size_us             DOUBLE PRECISION,            -- Kích cỡ giày US (Shoe Size theo bài báo khoa học)
+    quantity_on_hand    INTEGER DEFAULT 1            -- Số lượng tồn tại ô slot đó (mặc định 1 đôi/hộp nhỏ)
 );
 
 -- ============================================================================
--- 3. INDEXES CHO TỐI ƯU HÓA TRUY VẤN OLAP & DSS
+-- 3. DSS INVENTORY VIEW (VIEW QUẢN TRỊ TỒN KHO & Ô CHỨA CHO DSS)
+-- ============================================================================
+
+CREATE OR REPLACE VIEW v_warehouse_inventory AS
+SELECT 
+    s.storage_id,
+    s.strategy_key,
+    strat.strategy_code,
+    strat.strategy_name,
+    l.location_key,
+    l.location_code,
+    l.zone,
+    l.aisle,
+    l.slot,
+    l.z,
+    l.floor_type,
+    l.dist_from_origin,
+    l.xyz_code AS location_priority_xyz,             -- X: Vị trí đẹp/dễ lấy, Y, Z, C
+    l.abc_zone AS location_zone_abc,                 -- A: Gần cửa, B: Giữa, C: Sâu
+    s.slot_number,
+    p.product_key,
+    p.reference AS sku_reference,
+    p.abc_code AS sku_priority_abc,                  -- A: Hàng Hot, B: Vừa, C: Chậm
+    s.size_us,
+    s.quantity_on_hand
+FROM fact_storage s
+JOIN dim_location l ON s.location_key = l.location_key
+JOIN dim_product p ON s.product_key = p.product_key
+JOIN dim_strategy strat ON s.strategy_key = strat.strategy_key;
+
+-- ============================================================================
+-- 4. INDEXES CHO TỐI ƯU HÓA TRUY VẤN OLAP & DSS
 -- ============================================================================
 
 -- fact_order
@@ -191,6 +227,7 @@ CREATE INDEX idx_fs_strategy  ON fact_storage(strategy_key);
 CREATE INDEX idx_fs_location  ON fact_storage(location_key);
 CREATE INDEX idx_fs_product   ON fact_storage(product_key);
 CREATE INDEX idx_fs_class     ON fact_storage(classification_code);
+CREATE INDEX idx_fs_size      ON fact_storage(size_us);
 
 -- dim_wave
 CREATE INDEX idx_dw_date_key  ON dim_wave(wave_date_key);
@@ -199,8 +236,39 @@ CREATE INDEX idx_dw_shift     ON dim_wave(wave_shift);
 -- dim_location
 CREATE INDEX idx_dl_zone      ON dim_location(zone);
 CREATE INDEX idx_dl_floor     ON dim_location(floor_type);
+CREATE INDEX idx_dl_xyz       ON dim_location(xyz_code);
+CREATE INDEX idx_dl_abc_zone  ON dim_location(abc_zone);
+CREATE INDEX idx_dl_dist      ON dim_location(dist_from_origin);
 
--- dim_location
-CREATE INDEX idx_dl_zone      ON dim_location(zone);
-CREATE INDEX idx_dl_floor     ON dim_location(floor_type);
-
+-- =============================================================================
+-- 6. VIEWS HỖ TRỢ RA QUYẾT ĐỊNH (DSS VIEWS)
+-- =============================================================================
+DROP VIEW IF EXISTS v_warehouse_inventory;
+CREATE VIEW v_warehouse_inventory AS
+SELECT 
+    s.storage_id,
+    s.strategy_key,
+    strat.strategy_code,
+    strat.strategy_name,
+    s.location_key,
+    loc.location_code,
+    loc.zone,
+    loc.aisle,
+    loc.slot,
+    loc.x,
+    loc.y,
+    loc.z,
+    loc.floor_type,
+    loc.dist_from_origin,
+    loc.xyz_code AS location_priority_xyz,
+    loc.abc_zone AS location_zone_abc,
+    s.slot_number,
+    s.product_key,
+    p.reference  AS sku_reference,
+    p.abc_code   AS sku_priority_abc,
+    s.size_us,
+    s.quantity_on_hand
+FROM fact_storage s
+JOIN dim_strategy strat ON s.strategy_key = strat.strategy_key
+JOIN dim_location loc   ON s.location_key = loc.location_key
+JOIN dim_product p     ON s.product_key  = p.product_key;

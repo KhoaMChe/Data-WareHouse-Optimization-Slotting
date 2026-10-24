@@ -82,6 +82,22 @@ BTL/
 ├── OLAP/
 │   └── OLAP_Analysis.ipynb       # Phân tích đa chiều: Roll-up, Drill-down, Slice, Dice, Cube, Pareto
 │
+├── DSS/
+│   ├── dss_pipeline.py           # Pipeline DSS: Rule-Based vs ML (80% Train, 20% Test)
+│   ├── DSS_Modeling_and_Evaluation.ipynb # Notebook trực quan hóa và demo mô hình DSS
+│   ├── champion_random_forest.joblib     # Model Quán quân (Accuracy 96.18%)
+│   └── decision_tree_model.joblib        # Model Cây quyết định
+│
+├── datadss/                      # Kết quả dự đoán & khuyến nghị ra quyết định
+│   ├── benchmark_comparison.csv
+│   ├── champion_slotting_recommendations.csv
+│   ├── feature_importance_random_forest.csv
+│   ├── test_predictions_comparison.csv
+│   └── confusion_matrix_*.csv
+│
+├── dashboard/
+│   └── app.py                    # Giao diện Web tương tác Streamlit (KPI, 2D Map, OLAP, DSS)
+│
 ├── docker-compose.yml            # Khởi chạy PostgreSQL 16 trên Docker (Port 5433)
 └── README.md                     # Tài liệu hướng dẫn dự án
 ```
@@ -169,3 +185,13 @@ Container `warehouse_dw_postgres` sẽ khởi động và sẵn sàng nhận k�
 3. **Trực quan hóa Dashboard (`dashboard/`):**
    - Xây dựng giao diện Streamlit kết nối trực tiếp PostgreSQL hiển thị Heatmap kho 2D/3D và module gợi ý vị trí ô kệ.
    - Test thử chuyển về branch main
+
+### Bước 5: Khởi động Dashboard Streamlit
+
+Để mở giao diện trực quan hóa tương tác và Trung tâm ra quyết định DSS:
+
+`powershell
+streamlit run dashboard/app.py
+`
+
+Dashboard sẽ tự động mở tại trình duyệt: http://localhost:8501.

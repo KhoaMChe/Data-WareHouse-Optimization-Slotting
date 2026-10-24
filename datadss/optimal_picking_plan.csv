@@ -1,0 +1,7 @@
+﻿step,sku,size,location_code,floor_type,shelf_level_z,slot_number,location_priority_xyz,x,y,dist_from_origin
+1,O9YFO8,7.0,D-19-13,Manual Picking,1,10,Z,186.0,212.0,282.21
+2,I1X92B,7.0,E-20-23,Manual Picking,2,1,Z,186.0,360.0,405.7
+3,I1X92B,8.0,E-22-22,Manual Picking,2,11,Z,152.0,360.0,391.29
+4,O9YFO8,9.0,K-14-13,Manual Picking,1,15,Y,336.0,868.0,930.82
+5,O9YFO8,8.0,E-18-21,Manual Picking,2,10,Z,268.0,360.0,449.25
+6,I1X92B,9.0,C-16-13,Manual Picking,1,7,Z,286.0,180.0,338.08
