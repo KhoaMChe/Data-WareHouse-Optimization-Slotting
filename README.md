@@ -91,22 +91,28 @@ BTL/
 ## 🚀 3. Hướng Dẫn Khởi Chạy Nhanh (Quick Start)
 
 ### Bước 1: Khởi động Database PostgreSQL trên Docker
+
 Mở PowerShell tại thư mục dự án và chạy:
+
 ```powershell
 docker compose up -d
 ```
+
 Container `warehouse_dw_postgres` sẽ khởi động và sẵn sàng nhận kết nối trên cổng **5433**.
 
 ### Bước 2: Chạy Tầng 1 — ETL Làm sạch dữ liệu (`ETL/ETL.ipynb`)
-* Mở và chạy file [`ETL/ETL.ipynb`](file:///d:/Cong%20Viec/Tailieu261/DataWarehouse/BTL/ETL/ETL.ipynb).
+
+* Mở và chạy file [`ETL/ETL.ipynb`](<file:///d:/Cong%20Viec/Tailieu261/DataWarehouse/BTL/ETL/ETL.ipynb>).
 * Pipeline sẽ xử lý lỗi, chuẩn hóa kiểu dữ liệu, unpivot 4 chiến lược kho và xuất 6 file sạch vào thư mục `data/staging/`.
 
 ### Bước 3: Chạy Tầng 2 — Mô hình hóa & Nạp Data Warehouse (`ETL/DataWH.ipynb`)
-* Mở và chạy file [`ETL/DataWH.ipynb`](file:///d:/Cong%20Viec/Tailieu261/DataWarehouse/BTL/ETL/DataWH.ipynb).
+
+* Mở và chạy file [`ETL/DataWH.ipynb`](<file:///d:/Cong%20Viec/Tailieu261/DataWarehouse/BTL/ETL/DataWH.ipynb>).
 * Dữ liệu từ `data/staging/` sẽ được ánh xạ khóa thay thế (Surrogate Keys) và nạp tự động vào PostgreSQL trong container Docker.
 
 ### Bước 4: Chạy Phân tích Đa Chiều OLAP (`OLAP/OLAP_Analysis.ipynb`)
-* Mở và xem kết quả tại [`OLAP/OLAP_Analysis.ipynb`](file:///d:/Cong%20Viec/Tailieu261/DataWarehouse/BTL/OLAP/OLAP_Analysis.ipynb).
+
+* Mở và xem kết quả tại [`OLAP/OLAP_Analysis.ipynb`](<file:///d:/Cong%20Viec/Tailieu261/DataWarehouse/BTL/OLAP/OLAP_Analysis.ipynb>).
 * Bao gồm đầy đủ 6 thao tác phân tích nâng cao (Roll-up, Drill-down, Slice, Dice, Pivot/Cube, Pareto 80/20) kèm 6 biểu đồ trực quan hóa.
 
 ---
@@ -114,20 +120,23 @@ Container `warehouse_dw_postgres` sẽ khởi động và sẵn sàng nhận k�
 ## 🔌 4. Hướng Dẫn Kết Nối DBeaver & Xem Sơ Đồ ERD
 
 ### Thông tin kết nối:
-| Thông số | Giá trị |
-|---|---|
-| **Database Server** | PostgreSQL 16 |
-| **Host** | `localhost` |
-| **Port** | `5433` *(tránh trùng cổng 5432 cục bộ)* |
-| **Database Name** | `warehouse_dw` |
-| **Username** | `dw_admin` |
-| **Password** | `dw_password123` |
+
+| Thông số                | Giá trị                                        |
+| ------------------------- | ------------------------------------------------ |
+| **Database Server** | PostgreSQL 16                                    |
+| **Host**            | `localhost`                                    |
+| **Port**            | `5433` *(tránh trùng cổng 5432 cục bộ)* |
+| **Database Name**   | `warehouse_dw`                                 |
+| **Username**        | `dw_admin`                                     |
+| **Password**        | `dw_password123`                               |
 
 ### Các bước kết nối trên DBeaver:
+
 1. Nhấn nút **New Connection** $\rightarrow$ Chọn **PostgreSQL** $\rightarrow$ Bấm **Next**.
 2. Nhập các thông số trên $\rightarrow$ Nhấn **Test Connection** (hiện màu xanh là thành công) $\rightarrow$ Nhấn **Finish**.
 
 ### Xem sơ đồ ER Diagram:
+
 1. Trong cửa sổ **Database Navigator**, mở rộng:
    `warehouse_dw` $\rightarrow$ `Databases` $\rightarrow$ `warehouse_dw` $\rightarrow$ `Schemas` $\rightarrow$ `public`.
 2. **Nhấp đúp chuột vào thư mục `Tables`**.
@@ -137,16 +146,16 @@ Container `warehouse_dw_postgres` sẽ khởi động và sẵn sàng nhận k�
 
 ## 📊 5. Cấu Trúc Các Bảng Trong Data Warehouse
 
-| Bảng | Loại | Khóa chính | Số dòng | Mô tả nghiệp vụ |
-|---|:---:|---|:---:|---|
-| `dim_product` | Dimension | `product_key` | **317** | Toàn bộ danh mục SKU (gồm 208 catalog + 109 layout kho), phân loại ABC. |
-| `dim_location` | Dimension | `location_key` | **2,357** | Toàn bộ vị trí ô kệ (2,292 vị trí chuẩn + 65 vị trí layout/cửa xuất), tọa độ 3D. |
-| `dim_operator` | Dimension | `operator_key` | **24** | Danh sách nhân viên kho / Pickers. |
-| `dim_strategy` | Dimension | `strategy_key` | **4** | 4 chiến lược lưu trữ: Random, ClassBased, Dedicated, Hybrid. |
-| `dim_date` | Dimension | `date_key` | **288** | Chiều thời gian: Ngày, tháng, quý, năm, tuần, thứ, cờ cuối tuần. |
-| `fact_order` | Fact | `order_item_id` | **122,370** | Đơn hàng từ khách hàng: Mã đơn, item, số lượng đặt, size, ngày đặt. |
-| `fact_picking` | Fact | `pick_id` | **215,192** | Hoạt động lấy hàng thực tế theo Wave: Wave number, vị trí kệ, tọa độ, cự ly. |
-| `fact_storage` | Fact | `storage_id` | **167,634** | Hiện trạng phân bổ tồn kho của 4 chiến lược lưu trữ (slot 1–18). |
+| Bảng            |   Loại   | Khóa chính      |     Số dòng     | Mô tả nghiệp vụ                                                                              |
+| ---------------- | :-------: | ----------------- | :---------------: | ------------------------------------------------------------------------------------------------ |
+| `dim_product`  | Dimension | `product_key`   |   **317**   | Toàn bộ danh mục SKU (gồm 208 catalog + 109 layout kho), phân loại ABC.                    |
+| `dim_location` | Dimension | `location_key`  |  **2,357**  | Toàn bộ vị trí ô kệ (2,292 vị trí chuẩn + 65 vị trí layout/cửa xuất), tọa độ 3D. |
+| `dim_operator` | Dimension | `operator_key`  |   **24**   | Danh sách nhân viên kho / Pickers.                                                            |
+| `dim_strategy` | Dimension | `strategy_key`  |    **4**    | 4 chiến lược lưu trữ: Random, ClassBased, Dedicated, Hybrid.                                |
+| `dim_date`     | Dimension | `date_key`      |   **288**   | Chiều thời gian: Ngày, tháng, quý, năm, tuần, thứ, cờ cuối tuần.                      |
+| `fact_order`   |   Fact   | `order_item_id` | **122,370** | Đơn hàng từ khách hàng: Mã đơn, item, số lượng đặt, size, ngày đặt.             |
+| `fact_picking` |   Fact   | `pick_id`       | **215,192** | Hoạt động lấy hàng thực tế theo Wave: Wave number, vị trí kệ, tọa độ, cự ly.       |
+| `fact_storage` |   Fact   | `storage_id`    | **167,634** | Hiện trạng phân bổ tồn kho của 4 chiến lược lưu trữ (slot 1–18).                     |
 
 ---
 
@@ -159,4 +168,4 @@ Container `warehouse_dw_postgres` sẽ khởi động và sẵn sàng nhận k�
    - **Module 2 (Replenishment Alert):** Cảnh báo khi ô kệ picking sắp hết hàng dựa trên nhu cầu đơn hàng từ `fact_order`.
 3. **Trực quan hóa Dashboard (`dashboard/`):**
    - Xây dựng giao diện Streamlit kết nối trực tiếp PostgreSQL hiển thị Heatmap kho 2D/3D và module gợi ý vị trí ô kệ.
-
+   - Test thử chuyển về branch main
